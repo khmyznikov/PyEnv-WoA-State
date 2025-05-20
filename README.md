@@ -1,7 +1,10 @@
+## Test suites and track issues regarding the compatibility of Python libraries with Windows ARM64
 
-## Test suites to check compatibility of Python libraries with Windows arm64
+This repository contains scripts to test compatibility of Python libraries with Windows arm64 as well as performance benchmarks between x64 and arm64.
 
-### compat_run - handpicked set of onnx oriented libraries and workflows
+Check the **[list of libraries](https://github.com/khmyznikov/PyEnv-WoA-State/issues/1)** that have known compatibility issues with Windows ARM64
+
+### compat_run - handpicked set of ML oriented libraries and workflows
 
 Run from PowerShell Admin:
 ```powershell
