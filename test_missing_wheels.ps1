@@ -30,13 +30,13 @@
     Path to a text file containing a list of Python packages to test, one package name per line.
 
 .EXAMPLE
-    .\orange_package_test.ps1 -PackageListFile "orange_packages.txt" -pythonPath C:\Python312\python.exe
+    .\test_missing_wheels.ps1 -PackageListFile "missing_packages.txt" -pythonPath C:\Python312\python.exe
 
 .EXAMPLE
-    .\orange_package_test.ps1 -PackageListFile "log\orange_packages_list_2023-10-30_15-30-45.txt" -RetainEnvironments -useCacheDir
+    .\test_missing_wheels.ps1 -PackageListFile "log\missing_packages_list_2023-10-30_15-30-45.txt" -RetainEnvironments -useCacheDir
 
 .NOTES
-    The script can be used with the output from 'get_orange_packages.py' which generates
+    The script can be used with the output from 'get_missing_wheels.py' which generates
     a list of PyPI packages that do not provide win_arm64 or abi-none wheels.
 #>
 param (
@@ -69,8 +69,8 @@ catch {
 }
 
 $date = Get-Date -Format "dd-MM-yyyy_HH-mm-ss"
-$transcriptFile = "log/orange_test_$($architectureInfo)_$date.log"
-$csvFile = "log/orange_test_$($architectureInfo)_$date.csv"
+$transcriptFile = "log/missing_test_$($architectureInfo)_$date.log"
+$csvFile = "log/missing_test_$($architectureInfo)_$date.csv"
 
 # Ensure log directory exists
 if (-not (Test-Path -Path "log" -PathType Container)) {
@@ -145,13 +145,13 @@ function Remove-VirtualEnv {
     }
 }
 
-function Test-OrangePackageInstallation {
+function Test-missingPackageInstallation {
     param (
         [Parameter(Mandatory=$true)]
         [string]$packageName
     )
 
-    $envName = ".temp/env_orange_$($packageName -replace '[^a-zA-Z0-9]', '_')" # Sanitize name
+    $envName = ".temp/env_missing_$($packageName -replace '[^a-zA-Z0-9]', '_')" # Sanitize name
     $result = @{
         Package = $packageName
         Result  = "Failed"
@@ -239,19 +239,19 @@ if (-not (Test-Path $PackageListFile)) {
     exit 1
 }
 
-$orangePackages = @()
+$missingPackages = @()
 try {
     # Read packages from file, filtering out empty lines and trimming whitespace
-    $orangePackages = Get-Content -Path $PackageListFile | ForEach-Object { 
+    $missingPackages = Get-Content -Path $PackageListFile | ForEach-Object { 
         if ($_ -ne $null) { "$_".Trim() } 
     } | Where-Object { $_ -ne '' }
 
-    if ($orangePackages.Count -eq 0) {
+    if ($missingPackages.Count -eq 0) {
          Write-Host "No packages found in the provided file." -BackgroundColor Yellow
          # Don't exit, just report no packages to test
     }
     else {
-         Write-Host "Found $($orangePackages.Count) packages to test." -BackgroundColor Green
+         Write-Host "Found $($missingPackages.Count) packages to test." -BackgroundColor Green
     }
 }
 catch {
@@ -263,11 +263,11 @@ catch {
 # 2. Test installation for each package
 $results = @()
 $overallExecutionTime = Measure-Command {
-    if ($orangePackages.Count -gt 0) {
-        Write-Host "Starting installation tests for $($orangePackages.Count) packages..." -BackgroundColor Green
+    if ($missingPackages.Count -gt 0) {
+        Write-Host "Starting installation tests for $($missingPackages.Count) packages..." -BackgroundColor Green
 
-        foreach ($package in $orangePackages) {
-            $testResult = Test-OrangePackageInstallation -packageName $package
+        foreach ($package in $missingPackages) {
+            $testResult = Test-missingPackageInstallation -packageName $package
             $results += [PSCustomObject]@{
                 Library = $testResult.Package
                 Result  = $testResult.Result
@@ -300,7 +300,7 @@ if ($results.Count -gt 0) {
     $failCount = $results.Count - $successCount
     Write-Host "Summary: $successCount Succeeded, $failCount Failed."
 }
-elseif ($orangePackages.Count -eq 0) {
+elseif ($missingPackages.Count -eq 0) {
      Write-Host "No packages were tested." -BackgroundColor Yellow
 }
 else {

@@ -32,7 +32,7 @@ def get_json_url(package_name):
 def annotate_wheels(packages):
     print("Getting wheel data...", file=sys.stderr)
     num_packages = len(packages)
-    orange_packages = []
+    missing_packages = []
     for index, package in enumerate(packages):
         print(f"{index + 1}/{num_packages} {package['name']}", file=sys.stderr)
         has_abi_none_wheel = False
@@ -79,11 +79,11 @@ def annotate_wheels(packages):
                     else:
                          print(f" ! Malformed wheel filename skipped for {package['name']}: {download['filename']}", file=sys.stderr)
 
-        # If it has neither a specific win_arm64 wheel nor a generic abi_none wheel, it's "orange"
+        # If it has neither a specific win_arm64 wheel nor a generic abi_none wheel, it's "missing"
         if not has_win_arm64_wheel and not has_abi_none_wheel:
-            orange_packages.append(package['name'])
+            missing_packages.append(package['name'])
 
-    return orange_packages
+    return missing_packages
 
 
 def get_top_packages():
@@ -150,18 +150,18 @@ if __name__ == "__main__":
 
     # Generate timestamped filename
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_filename = os.path.join(log_dir, f"orange_packages_list_{timestamp}.txt")
+    output_filename = os.path.join(log_dir, f"missing_packages_list_{timestamp}.txt")
 
     # Write the list to the file
     try:
         with open(output_filename, 'w') as f:
             for name in packages_to_test:
                 f.write(name + '\n')
-        print(f"Orange package list saved to: {output_filename}", file=sys.stderr)
+        print(f"Missing package list saved to: {output_filename}", file=sys.stderr)
     except IOError as e:
-        print(f"Error writing orange package list to file {output_filename}: {e}", file=sys.stderr)
+        print(f"Error writing missing package list to file {output_filename}: {e}", file=sys.stderr)
 
-    # Print only the names of the orange packages for PowerShell
+    # Print only the names of the missing packages for PowerShell
     for name in packages_to_test:
         print(name)
 
