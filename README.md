@@ -2,8 +2,10 @@
 
 This repository contains scripts to test compatibility of Python libraries with Windows Arm64 as well as performance benchmarks between x64 and Arm64.
 
-Check the **[list of libraries🐍](https://github.com/khmyznikov/PyEnv-WoA-State/issues/1)** that have known compatibility issues with Windows Arm64
+<br>
 
+> ## Check the **[Libs tracker🐍](https://github.com/khmyznikov/PyEnv-WoA-State/issues/1)** to get the latest updated on compatibility issues and make contribution to Python ecosystem on WoA
+<br>
 
 ### get_missing_wheels
 
