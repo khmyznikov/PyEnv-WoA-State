@@ -3,9 +3,6 @@ permissions:
   contents: read
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: The version to build
 
 env:
   CRYPTOGRAPHY_REPO: https://github.com/pyca/cryptography.git
@@ -38,6 +35,7 @@ jobs:
         run: |
           cd ${{ env.CRYPTOGRAPHY_DIR }}
           uv build --build-constraint=../$BUILD_REQUIREMENTS_PATH --require-hashes --sdist
+          mkdir -p ../dist
           cp dist/* ../dist/
       
       - name: Make sdist and wheel (vectors)
