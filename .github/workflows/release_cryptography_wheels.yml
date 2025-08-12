@@ -1,4 +1,4 @@
-name: Release cryptography wheels
+name: cryptography release
 
 permissions:
   contents: write
