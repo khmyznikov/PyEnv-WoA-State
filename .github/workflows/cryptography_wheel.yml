@@ -60,8 +60,7 @@ jobs:
         with:
           name: "requirements-files"
           path: |
-            ${{ env.BUILD_REQUIREMENTS_PATH }}
-            ${{ env.UV_REQUIREMENTS_PATH }}
+            ${{ env.CRYPTOGRAPHY_DIR }}/.github/requirements/
 
   windows:
     needs: [sdist]
@@ -73,7 +72,6 @@ jobs:
           - {ARCH: 'arm64', WINDOWS: 'arm64', RUST_TRIPLE: 'aarch64-pc-windows-msvc', RUNNER: 'windows-11-arm'}
         PYTHON:
           - {VERSION: "3.11", "ABI_VERSION": "py311"}
-          - {VERSION: "pypy-3.11"}
           
     name: "${{ matrix.PYTHON.VERSION }} ${{ matrix.WINDOWS.WINDOWS }} ${{ matrix.PYTHON.ABI_VERSION }}"
     steps:
@@ -81,10 +79,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Create directories for requirements
+        run: |
+          mkdir -p cryptography-repo/.github/requirements/
+        shell: bash
+
       - name: Download requirements files
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: requirements-files
+          path: cryptography-repo/.github/requirements/
           
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
@@ -117,7 +121,10 @@ jobs:
             echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
         shell: bash
 
-      - run: pip install -r "${UV_REQUIREMENTS_PATH}"
+      - run: |
+          # Verify requirements files exist before using them
+          ls -la ${UV_REQUIREMENTS_PATH}
+          pip install -r "${UV_REQUIREMENTS_PATH}"
         shell: bash
       
       - run: mkdir wheelhouse
