@@ -23,44 +23,36 @@ jobs:
     runs-on: ubuntu-latest
     name: Setup repository
     outputs:
-      commit_sha: ${{ steps.clone-repo.outputs.commit_sha }}
-      checkout_ref: ${{ steps.clone-repo.outputs.checkout_ref }}
+      commit_sha: ${{ steps.get-commit.outputs.commit_sha }}
+      checkout_ref: ${{ steps.get-commit.outputs.checkout_ref }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false
           
-      - name: Clone gRPC repository and get commit SHA
-        id: clone-repo
+      - name: Determine version information
+        id: get-commit
         run: |
-          git clone ${{ env.GRPC_REPO }} ${{ env.GRPC_DIR }}
+          # Clone a shallow copy just to get version info
+          git clone --depth 1 ${{ env.GRPC_REPO }} ${{ env.GRPC_DIR }}
           cd ${{ env.GRPC_DIR }}
           
           # Determine what to checkout
           if [ -n "${{ github.event.inputs.version }}" ]; then
             CHECKOUT_REF="${{ github.event.inputs.version }}"
+            git fetch --depth 1 origin $CHECKOUT_REF
             git checkout $CHECKOUT_REF
             VERSION_INFO="${{ github.event.inputs.version }}-$(git rev-parse --short HEAD)"
           else
             CHECKOUT_REF="master"
-            git checkout master
             VERSION_INFO="$(git rev-parse --short HEAD)"
           fi
-          
-          git submodule update --init --recursive
           
           echo "checkout_ref=${CHECKOUT_REF}" >> $GITHUB_OUTPUT
           echo "commit_sha=${VERSION_INFO}" >> $GITHUB_OUTPUT
           echo "Using checkout ref: ${CHECKOUT_REF}"
           echo "Using version info for artifacts: ${VERSION_INFO}"
-
-      - name: Upload gRPC repository
-        uses: actions/upload-artifact@v4
-        with:
-          name: "grpc-repo"
-          path: ${{ env.GRPC_DIR }}
-          retention-days: 1
 
   build_wheels:
     needs: [setup]
@@ -71,25 +63,22 @@ jobs:
       matrix:
         buildplat:
           - ["windows-11-arm", "win_arm64"]
-        python: [["cp313", "3.13"]] #["cp311", "3.11"], ["cp312", "3.12"], 
+        python: [["cp313", "3.13"], ["cp311", "3.11"], ["cp312", "3.12"]] 
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python[1] }}
-          architecture: arm64
-
-      - name: Download gRPC repository
-        uses: actions/download-artifact@v4
-        with:
-          name: grpc-repo
-          path: ${{ env.GRPC_DIR }}
+          
+      - name: Clone gRPC repository
+        shell: bash
+        run: |
+          # Clone at the specific ref determined by the setup job
+          git clone ${{ env.GRPC_REPO }} ${{ env.GRPC_DIR }}
+          cd ${{ env.GRPC_DIR }}
+          git checkout ${{ needs.setup.outputs.checkout_ref }}
+          git submodule update --init --recursive
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.3
