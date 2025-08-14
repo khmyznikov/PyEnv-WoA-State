@@ -68,12 +68,11 @@ jobs:
           git checkout ${{ needs.setup.outputs.checkout_ref }}
           git submodule update --init --recursive
 
-      - name: Upload gRPC repository
-        uses: actions/upload-artifact@v4
+      - name: Cache gRPC repository
+        uses: actions/cache/save@v4
         with:
-          name: grpc-repo-${{ needs.setup.outputs.commit_sha }}
           path: ${{ env.GRPC_DIR }}
-          retention-days: 1
+          key: grpc-repo-${{ needs.setup.outputs.commit_sha }}
 
   build_wheels:
     needs: [setup, clone_repo]
@@ -98,11 +97,12 @@ jobs:
           python-version: ${{ matrix.python[1] }}
           architecture: arm64
 
-      - name: Download gRPC repository
-        uses: actions/download-artifact@v4
+      - name: Restore gRPC repository
+        uses: actions/cache/restore@v4
         with:
-          name: grpc-repo-${{ needs.setup.outputs.commit_sha }}
           path: ${{ env.GRPC_DIR }}
+          key: grpc-repo-${{ needs.setup.outputs.commit_sha }}
+          fail-on-cache-miss: true
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.3
