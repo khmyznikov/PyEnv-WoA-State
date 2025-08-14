@@ -1,0 +1,83 @@
+name: Build Python Wheel for gRPC win_arm64
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to build (leave empty for latest commit)
+        required: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GRPC_REPO: https://github.com/grpc/grpc.git
+
+jobs:
+  build_wheels:
+    name: Build wheel for ${{ matrix.python[0] }}-${{ matrix.buildplat[1] }}
+    runs-on: ${{ matrix.buildplat[0] }}
+    outputs:
+      commit_sha: ${{ steps.get-commit.outputs.commit_sha }}
+    strategy:
+      fail-fast: false
+      matrix:
+        buildplat:
+          - ["windows-11-arm", "win_arm64"]
+        python: [["cp311", "3.11"], ["cp312", "3.12"], ["cp313", "3.13"]]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          
+      - name: Clone gRPC repository
+        run: |
+          git clone ${{ env.GRPC_REPO }} grpc-repo
+          cd grpc-repo
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            git checkout ${{ github.event.inputs.version }}
+          else
+            git checkout master
+          fi
+          git submodule update --init --recursive
+        shell: bash
+
+      - name: Get commit info
+        id: get-commit
+        run: |
+          cd grpc-repo
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION_INFO="${{ github.event.inputs.version }}-$(git rev-parse --short HEAD)"
+          else
+            VERSION_INFO="$(git rev-parse --short HEAD)"
+          fi
+          echo "commit_sha=${VERSION_INFO}" >> $GITHUB_OUTPUT
+          echo "Using version info for artifacts: ${VERSION_INFO}"
+        shell: bash
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.23.3
+        env:
+          CIBW_BUILD: ${{ matrix.python[0] }}-${{ matrix.buildplat[1] }}
+          CIBW_BUILD_FRONTEND: 'pip'
+          CIBW_PLATFORM: 'windows'
+          CIBW_ARCHS: 'ARM64'
+          CIBW_PROJECT_REQUIRES_PYTHON: "==${{ matrix.python[1]}}.*"
+          PACKAGE_DIR: ./grpc-repo
+
+      - name: Validate wheel RECORD
+        shell: bash -el {0}
+        run: |
+          python -m pip install wheel
+          for whl in $(ls wheelhouse); do wheel unpack wheelhouse/$whl -d /tmp; done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: "grpcio-${{ steps.get-commit.outputs.commit_sha }}-${{ matrix.buildplat[1] }}-${{ matrix.python[1] }}-${{ matrix.python[0] }}"
+          path: ./wheelhouse/*.whl
