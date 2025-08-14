@@ -87,14 +87,18 @@ jobs:
           git submodule update --init --recursive
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.23.3
+        run: |
+          cd ${{ env.GRPC_DIR }}
+          python -m pip install cibuildwheel
+          python -m cibuildwheel . --output-dir ../wheelhouse
+        shell: bash
         env:
           CIBW_BUILD: ${{ matrix.python[0] }}-${{ matrix.buildplat[1] }}
           CIBW_BUILD_FRONTEND: 'pip'
           CIBW_PLATFORM: 'windows'
           CIBW_ARCHS: 'ARM64'
           CIBW_PROJECT_REQUIRES_PYTHON: "==${{ matrix.python[1]}}.*"
-          PACKAGE_DIR: ./${{ env.GRPC_DIR }}
+          CIBW_BEFORE_BUILD: pip install -U pip setuptools wheel
 
       - name: Validate wheel RECORD
         shell: bash -el {0}
