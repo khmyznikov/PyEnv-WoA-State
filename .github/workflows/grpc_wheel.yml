@@ -1,4 +1,4 @@
-name: Build Python Wheel for gRPC win_arm64
+name: grpc win_arm64
 
 on:
   workflow_dispatch:
@@ -16,13 +16,57 @@ permissions:
 
 env:
   GRPC_REPO: https://github.com/grpc/grpc.git
+  GRPC_DIR: grpc-repo
 
 jobs:
-  build_wheels:
-    name: Build wheel for ${{ matrix.python[0] }}-${{ matrix.buildplat[1] }}
-    runs-on: ${{ matrix.buildplat[0] }}
+  setup:
+    runs-on: ubuntu-latest
+    name: Setup repository
     outputs:
       commit_sha: ${{ steps.get-commit.outputs.commit_sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          
+      - name: Clone gRPC repository
+        run: |
+          git clone ${{ env.GRPC_REPO }} ${{ env.GRPC_DIR }}
+          cd ${{ env.GRPC_DIR }}
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            git checkout ${{ github.event.inputs.version }}
+          else
+            git checkout master
+          fi
+          git submodule update --init --recursive
+
+      - name: Get commit info
+        id: get-commit
+        run: |
+          cd ${{ env.GRPC_DIR }}
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION_INFO="${{ github.event.inputs.version }}-$(git rev-parse --short HEAD)"
+          else
+            VERSION_INFO="$(git rev-parse --short HEAD)"
+          fi
+          echo "commit_sha=${VERSION_INFO}" >> $GITHUB_OUTPUT
+          echo "Using version info for artifacts: ${VERSION_INFO}"
+
+      - name: Create repository archive
+        run: |
+          tar -czf grpc-repo.tar.gz ${{ env.GRPC_DIR }}
+          
+      - name: Upload repository archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: grpc-repository
+          path: grpc-repo.tar.gz
+
+  build_wheels:
+    needs: [setup]
+    name: Build wheel for ${{ matrix.python[0] }}-${{ matrix.buildplat[1] }}
+    runs-on: ${{ matrix.buildplat[0] }}
     strategy:
       fail-fast: false
       matrix:
@@ -36,30 +80,22 @@ jobs:
         with:
           persist-credentials: false
           
-      - name: Clone gRPC repository
-        run: |
-          git clone ${{ env.GRPC_REPO }} grpc-repo
-          cd grpc-repo
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            git checkout ${{ github.event.inputs.version }}
-          else
-            git checkout master
-          fi
-          git submodule update --init --recursive
+      - name: Download repository archive
+        uses: actions/download-artifact@v4
+        with:
+          name: grpc-repository
+          
+      - name: Extract repository
         shell: bash
+        run: |
+          tar -xzf grpc-repo.tar.gz
+          rm grpc-repo.tar.gz
 
-      - name: Get commit info
-        id: get-commit
-        run: |
-          cd grpc-repo
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION_INFO="${{ github.event.inputs.version }}-$(git rev-parse --short HEAD)"
-          else
-            VERSION_INFO="$(git rev-parse --short HEAD)"
-          fi
-          echo "commit_sha=${VERSION_INFO}" >> $GITHUB_OUTPUT
-          echo "Using version info for artifacts: ${VERSION_INFO}"
-        shell: bash
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python[1] }}
+          architecture: arm64
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.3
@@ -69,7 +105,7 @@ jobs:
           CIBW_PLATFORM: 'windows'
           CIBW_ARCHS: 'ARM64'
           CIBW_PROJECT_REQUIRES_PYTHON: "==${{ matrix.python[1]}}.*"
-          PACKAGE_DIR: ./grpc-repo
+          PACKAGE_DIR: ./${{ env.GRPC_DIR }}
 
       - name: Validate wheel RECORD
         shell: bash -el {0}
@@ -79,5 +115,17 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: "grpcio-${{ steps.get-commit.outputs.commit_sha }}-${{ matrix.buildplat[1] }}-${{ matrix.python[1] }}-${{ matrix.python[0] }}"
+          name: "grpcio-${{ needs.setup.outputs.commit_sha }}-${{ matrix.buildplat[1] }}-${{ matrix.python[1] }}-${{ matrix.python[0] }}"
           path: ./wheelhouse/*.whl
+
+  cleanup:
+    needs: [build_wheels]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Delete intermediate artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: |
+            grpc-repository
+          failOnError: false
