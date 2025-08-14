@@ -73,6 +73,7 @@ jobs:
         with:
           path: ${{ env.GRPC_DIR }}
           key: grpc-repo-${{ needs.setup.outputs.commit_sha }}
+          enableCrossOsArchive: true
 
   build_wheels:
     needs: [setup, clone_repo]
@@ -103,6 +104,7 @@ jobs:
           path: ${{ env.GRPC_DIR }}
           key: grpc-repo-${{ needs.setup.outputs.commit_sha }}
           fail-on-cache-miss: true
+          enableCrossOsArchive: true
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.3
