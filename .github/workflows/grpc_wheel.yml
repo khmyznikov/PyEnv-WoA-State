@@ -24,44 +24,35 @@ jobs:
     name: Setup repository
     outputs:
       commit_sha: ${{ steps.get-commit.outputs.commit_sha }}
+      checkout_ref: ${{ steps.get-commit.outputs.checkout_ref }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false
           
-      - name: Clone gRPC repository
-        run: |
-          git clone ${{ env.GRPC_REPO }} ${{ env.GRPC_DIR }}
-          cd ${{ env.GRPC_DIR }}
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            git checkout ${{ github.event.inputs.version }}
-          else
-            git checkout master
-          fi
-          git submodule update --init --recursive
-
-      - name: Get commit info
+      - name: Determine version information
         id: get-commit
         run: |
+          # Clone a shallow copy just to get version info
+          git clone --depth 1 ${{ env.GRPC_REPO }} ${{ env.GRPC_DIR }}
           cd ${{ env.GRPC_DIR }}
+          
+          # Determine what to checkout
           if [ -n "${{ github.event.inputs.version }}" ]; then
+            CHECKOUT_REF="${{ github.event.inputs.version }}"
+            git fetch --depth 1 origin $CHECKOUT_REF
+            git checkout $CHECKOUT_REF
             VERSION_INFO="${{ github.event.inputs.version }}-$(git rev-parse --short HEAD)"
           else
+            CHECKOUT_REF="master"
             VERSION_INFO="$(git rev-parse --short HEAD)"
           fi
-          echo "commit_sha=${VERSION_INFO}" >> $GITHUB_OUTPUT
-          echo "Using version info for artifacts: ${VERSION_INFO}"
-
-      - name: Create repository archive
-        run: |
-          tar -czf grpc-repo.tar.gz ${{ env.GRPC_DIR }}
           
-      - name: Upload repository archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: grpc-repository
-          path: grpc-repo.tar.gz
+          echo "checkout_ref=${CHECKOUT_REF}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${VERSION_INFO}" >> $GITHUB_OUTPUT
+          echo "Using checkout ref: ${CHECKOUT_REF}"
+          echo "Using version info for artifacts: ${VERSION_INFO}"
 
   build_wheels:
     needs: [setup]
@@ -79,23 +70,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-          
-      - name: Download repository archive
-        uses: actions/download-artifact@v4
-        with:
-          name: grpc-repository
-          
-      - name: Extract repository
-        shell: bash
-        run: |
-          tar -xzf grpc-repo.tar.gz
-          rm grpc-repo.tar.gz
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python[1] }}
           architecture: arm64
+          
+      - name: Clone gRPC repository
+        shell: bash
+        run: |
+          # Clone at the specific ref determined by the setup job
+          git clone ${{ env.GRPC_REPO }} ${{ env.GRPC_DIR }}
+          cd ${{ env.GRPC_DIR }}
+          git checkout ${{ needs.setup.outputs.checkout_ref }}
+          git submodule update --init --recursive
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.3
@@ -117,15 +106,3 @@ jobs:
         with:
           name: "grpcio-${{ needs.setup.outputs.commit_sha }}-${{ matrix.buildplat[1] }}-${{ matrix.python[1] }}-${{ matrix.python[0] }}"
           path: ./wheelhouse/*.whl
-
-  cleanup:
-    needs: [build_wheels]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Delete intermediate artifacts
-        uses: geekyeggo/delete-artifact@v5
-        with:
-          name: |
-            grpc-repository
-          failOnError: false
