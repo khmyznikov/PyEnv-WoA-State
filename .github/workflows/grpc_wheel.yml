@@ -23,60 +23,47 @@ jobs:
     runs-on: ubuntu-latest
     name: Setup repository
     outputs:
-      commit_sha: ${{ steps.get-commit.outputs.commit_sha }}
-      checkout_ref: ${{ steps.get-commit.outputs.checkout_ref }}
+      commit_sha: ${{ steps.clone-repo.outputs.commit_sha }}
+      checkout_ref: ${{ steps.clone-repo.outputs.checkout_ref }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false
           
-      - name: Determine version information
-        id: get-commit
+      - name: Clone gRPC repository and get commit SHA
+        id: clone-repo
         run: |
-          # Clone a shallow copy just to get version info
-          git clone --depth 1 ${{ env.GRPC_REPO }} ${{ env.GRPC_DIR }}
+          git clone ${{ env.GRPC_REPO }} ${{ env.GRPC_DIR }}
           cd ${{ env.GRPC_DIR }}
           
           # Determine what to checkout
           if [ -n "${{ github.event.inputs.version }}" ]; then
             CHECKOUT_REF="${{ github.event.inputs.version }}"
-            git fetch --depth 1 origin $CHECKOUT_REF
             git checkout $CHECKOUT_REF
             VERSION_INFO="${{ github.event.inputs.version }}-$(git rev-parse --short HEAD)"
           else
-            CHECKOUT_REF="master"
+            CHECKOUT_REF="main"
+            git checkout main
             VERSION_INFO="$(git rev-parse --short HEAD)"
           fi
+          
+          git submodule update --init --recursive
           
           echo "checkout_ref=${CHECKOUT_REF}" >> $GITHUB_OUTPUT
           echo "commit_sha=${VERSION_INFO}" >> $GITHUB_OUTPUT
           echo "Using checkout ref: ${CHECKOUT_REF}"
           echo "Using version info for artifacts: ${VERSION_INFO}"
 
-  clone_repo:
-    needs: [setup]
-    runs-on: ubuntu-latest
-    name: Clone gRPC repository
-    steps:
-      - name: Clone gRPC repository
-        shell: bash
-        run: |
-          # Clone at the specific ref determined by the setup job
-          git clone ${{ env.GRPC_REPO }} ${{ env.GRPC_DIR }}
-          cd ${{ env.GRPC_DIR }}
-          git checkout ${{ needs.setup.outputs.checkout_ref }}
-          git submodule update --init --recursive
-
-      - name: Cache gRPC repository
-        uses: actions/cache/save@v4
+      - name: Upload gRPC repository
+        uses: actions/upload-artifact@v4
         with:
+          name: "grpc-repo"
           path: ${{ env.GRPC_DIR }}
-          key: grpc-repo-${{ needs.setup.outputs.commit_sha }}-${{ github.run_id }}
-          enableCrossOsArchive: true
+          retention-days: 1
 
   build_wheels:
-    needs: [setup, clone_repo]
+    needs: [setup]
     name: Build wheel for ${{ matrix.python[0] }}-${{ matrix.buildplat[1] }}
     runs-on: ${{ matrix.buildplat[0] }}
     strategy:
@@ -98,16 +85,11 @@ jobs:
           python-version: ${{ matrix.python[1] }}
           architecture: arm64
 
-      - name: Restore gRPC repository
-        uses: actions/cache/restore@v4
+      - name: Download gRPC repository
+        uses: actions/download-artifact@v4
         with:
+          name: grpc-repo
           path: ${{ env.GRPC_DIR }}
-          key: grpc-repo-${{ needs.setup.outputs.commit_sha }}-${{ github.run_id }}
-          restore-keys: |
-            grpc-repo-${{ needs.setup.outputs.commit_sha }}-
-            grpc-repo-
-          fail-on-cache-miss: true
-          enableCrossOsArchive: true
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.3
