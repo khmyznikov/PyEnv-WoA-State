@@ -43,8 +43,8 @@ jobs:
             git checkout $CHECKOUT_REF
             VERSION_INFO="${{ github.event.inputs.version }}-$(git rev-parse --short HEAD)"
           else
-            CHECKOUT_REF="main"
-            git checkout main
+            CHECKOUT_REF="master"
+            git checkout master
             VERSION_INFO="$(git rev-parse --short HEAD)"
           fi
           
