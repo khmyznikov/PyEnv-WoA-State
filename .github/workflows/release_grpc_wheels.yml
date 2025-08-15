@@ -1,0 +1,111 @@
+name: grpc release
+
+permissions:
+  contents: write
+  
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Commit SHA from the build workflow (in format like v1.2.3-a1b2c3d or a1b2c3d)'
+        required: true
+      run_id:
+        description: 'The run ID of the grpc_wheel workflow'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        
+      - name: Download artifacts
+        uses: dawidd6/action-download-artifact@v11
+        with:
+          workflow: grpc_wheel.yml
+          run_id: ${{ github.event.inputs.run_id }}
+          path: artifacts
+          
+      - name: List downloaded artifacts
+        run: |
+          find artifacts -type f -name "*.whl" | sort
+          
+      - name: Extract version information and create releases
+        run: |
+          for WHEEL_DIR in artifacts/grpcio-${{ github.event.inputs.commit_sha }}-*; do
+            if [ ! -d "$WHEEL_DIR" ]; then
+              echo "No matching directories found"
+              continue
+            fi
+            
+            # Extract python version and platform from directory name
+            DIR_NAME=$(basename "$WHEEL_DIR")
+            echo "Processing directory: $DIR_NAME"
+            
+            # Parse the directory name to extract metadata
+            # Format could be either:
+            # grpcio-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION or
+            # grpcio-VERSION-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
+            IFS='-' read -ra PARTS <<< "$DIR_NAME"
+            
+            # Count parts to determine format
+            PARTS_COUNT=${#PARTS[@]}
+            
+            if [[ $PARTS_COUNT -eq 5 ]]; then
+              # Format: grpcio-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
+              PLATFORM="${PARTS[2]}"
+              PY_VERSION="${PARTS[3]}"
+              ABI_VERSION="${PARTS[4]}"
+            elif [[ $PARTS_COUNT -ge 6 ]]; then
+              # Format: grpcio-VERSION-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
+              # If version has dashes, there may be more parts
+              PLATFORM="${PARTS[3]}"
+              PY_VERSION="${PARTS[4]}"
+              ABI_VERSION="${PARTS[5]}"
+            else
+              echo "Unexpected format in directory name: $DIR_NAME"
+              continue
+            fi
+            
+            # Find the wheel file
+            WHEEL_FILE=$(find "$WHEEL_DIR" -name "*.whl" | head -n 1)
+            if [ -z "$WHEEL_FILE" ]; then
+              echo "No wheel file found in $WHEEL_DIR"
+              continue
+            fi
+            
+            WHEEL_BASENAME=$(basename "$WHEEL_FILE")
+            
+            # Extract package version from wheel filename
+            # Format is typically: grpcio-X.Y.Z-TAGS.whl
+            PKG_VERSION=$(echo "$WHEEL_BASENAME" | sed -E 's/grpcio-([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+            
+            # Verify we got a valid version
+            if [[ ! "$PKG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Warning: Couldn't extract valid package version from $WHEEL_BASENAME"
+              # Use the input commit SHA as fallback
+              PKG_VERSION="${{ github.event.inputs.commit_sha }}"
+            fi
+            
+            # Create a release tag that includes all relevant information
+            RELEASE_TAG="grpcio-${PKG_VERSION}-py${PY_VERSION}-${PLATFORM}"
+            RELEASE_NAME="gRPC ${PKG_VERSION} for Python ${PY_VERSION} (${PLATFORM})"
+            
+            echo "Creating release: $RELEASE_NAME with tag $RELEASE_TAG"
+            
+            # Create GitHub release
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_NAME" \
+              --notes "gRPC wheel built from commit ${{ github.event.inputs.commit_sha }}" \
+              --target ${{ github.ref_name }} \
+              "$WHEEL_FILE"
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Created releases for gRPC artifacts from commit ${{ github.event.inputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "Check the [releases page](https://github.com/${{ github.repository }}/releases) for the new releases." >> $GITHUB_STEP_SUMMARY
