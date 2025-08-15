@@ -31,8 +31,13 @@ jobs:
         run: |
           find artifacts -type f -name "*.whl" | sort
           
-      - name: Extract version information and create releases
+      - name: Extract version information and prepare releases
         run: |
+          # Create a temporary file to store wheel info
+          WHEELS_INFO_FILE="/tmp/wheels_info.txt"
+          > $WHEELS_INFO_FILE
+          
+          # First pass: Process all wheel directories to extract information
           for WHEEL_DIR in artifacts/grpcio-${{ github.event.inputs.commit_sha }}-*; do
             if [ ! -d "$WHEEL_DIR" ]; then
               echo "No matching directories found"
@@ -44,9 +49,7 @@ jobs:
             echo "Processing directory: $DIR_NAME"
             
             # Parse the directory name to extract metadata
-            # Format could be either:
-            # grpcio-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION or
-            # grpcio-VERSION-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
+            # Example: grpcio-34ebb07-win_arm64-3.11-cp311
             IFS='-' read -ra PARTS <<< "$DIR_NAME"
             
             # Count parts to determine format
@@ -54,6 +57,7 @@ jobs:
             
             if [[ $PARTS_COUNT -eq 5 ]]; then
               # Format: grpcio-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
+              # Example: grpcio-34ebb07-win_arm64-3.11-cp311
               PLATFORM="${PARTS[2]}"
               PY_VERSION="${PARTS[3]}"
               ABI_VERSION="${PARTS[4]}"
@@ -84,28 +88,82 @@ jobs:
             # Verify we got a valid version
             if [[ ! "$PKG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "Warning: Couldn't extract valid package version from $WHEEL_BASENAME"
-              # Use the input commit SHA as fallback
-              PKG_VERSION="${{ github.event.inputs.commit_sha }}"
+              
+              # Try alternative extraction in case format is different
+              if [[ "$WHEEL_BASENAME" =~ grpcio-([0-9]+\.[0-9]+\.[0-9]+[a-z0-9.]*)-cp ]]; then
+                PKG_VERSION="${BASH_REMATCH[1]}"
+                echo "Extracted alternative version format: $PKG_VERSION"
+              else
+                # Use the commit SHA from input as fallback
+                PKG_VERSION="$(echo "${{ github.event.inputs.commit_sha }}" | sed 's/^v//')"
+                echo "Using fallback version from commit SHA: $PKG_VERSION"
+              fi
             fi
             
-            # Create a release tag that includes all relevant information
-            RELEASE_TAG="grpcio-${PKG_VERSION}-py${PY_VERSION}-${PLATFORM}"
-            RELEASE_NAME="gRPC ${PKG_VERSION} for Python ${PY_VERSION} (${PLATFORM})"
+            # Add wheel information to the file for grouping
+            echo "$PKG_VERSION|$PLATFORM|$PY_VERSION|$WHEEL_FILE" >> $WHEELS_INFO_FILE
+          done
+          
+          # Sort the wheels info file to group by version and platform
+          sort $WHEELS_INFO_FILE > "${WHEELS_INFO_FILE}.sorted"
+          mv "${WHEELS_INFO_FILE}.sorted" $WHEELS_INFO_FILE
+          
+          # Debug: show collected wheel info
+          echo "Collected wheel information:"
+          cat $WHEELS_INFO_FILE
+          
+          # Second pass: Create releases grouped by gRPC version and platform
+          CURRENT_VERSION=""
+          CURRENT_PLATFORM=""
+          WHEEL_FILES=""
+          
+          while IFS='|' read -r VERSION PLATFORM PY_VERSION WHEEL_FILE; do
+            # If this is a new version+platform combination, create a release for previous group
+            if [[ "$CURRENT_VERSION" != "" && ("$CURRENT_VERSION" != "$VERSION" || "$CURRENT_PLATFORM" != "$PLATFORM") ]]; then
+              RELEASE_TAG="grpcio-${CURRENT_VERSION}-${CURRENT_PLATFORM}"
+              RELEASE_NAME="gRPC ${CURRENT_VERSION} for ${CURRENT_PLATFORM}"
+              
+              echo "Creating release: $RELEASE_NAME with tag $RELEASE_TAG"
+              
+              # Create GitHub release with all accumulated wheel files
+              gh release create "$RELEASE_TAG" \
+                --title "$RELEASE_NAME" \
+                --notes "gRPC wheels built from commit ${{ github.event.inputs.commit_sha }}" \
+                --target ${{ github.ref_name }} \
+                $WHEEL_FILES
+              
+              # Reset for next group
+              WHEEL_FILES=""
+            fi
             
-            echo "Creating release: $RELEASE_NAME with tag $RELEASE_TAG"
+            # Update current version and platform
+            CURRENT_VERSION="$VERSION"
+            CURRENT_PLATFORM="$PLATFORM"
             
-            # Create GitHub release
+            # Add wheel file to the list
+            WHEEL_FILES="$WHEEL_FILES $WHEEL_FILE"
+          done < $WHEELS_INFO_FILE
+          
+          # Create the last release group
+          if [[ "$CURRENT_VERSION" != "" ]]; then
+            RELEASE_TAG="grpcio-${CURRENT_VERSION}-${CURRENT_PLATFORM}"
+            RELEASE_NAME="gRPC ${CURRENT_VERSION} for ${CURRENT_PLATFORM}"
+            
+            echo "Creating final release: $RELEASE_NAME with tag $RELEASE_TAG"
+            
+            # Create GitHub release with all accumulated wheel files
             gh release create "$RELEASE_TAG" \
               --title "$RELEASE_NAME" \
-              --notes "gRPC wheel built from commit ${{ github.event.inputs.commit_sha }}" \
+              --notes "gRPC wheels built from commit ${{ github.event.inputs.commit_sha }}" \
               --target ${{ github.ref_name }} \
-              "$WHEEL_FILE"
-          done
+              $WHEEL_FILES
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Summary
         run: |
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "Created releases for gRPC artifacts from commit ${{ github.event.inputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "Created consolidated releases for gRPC artifacts from commit ${{ github.event.inputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "Releases are grouped by gRPC version and platform, with all Python versions included as assets in each release." >> $GITHUB_STEP_SUMMARY
           echo "Check the [releases page](https://github.com/${{ github.repository }}/releases) for the new releases." >> $GITHUB_STEP_SUMMARY
