@@ -102,6 +102,7 @@ jobs:
                 echo "Extracted alternative version format: $PKG_VERSION"
               else
                 echo "Error: Unable to extract package version from $WHEEL_BASENAME"
+                echo "Expected wheel name format: grpcio-X.Y.Z-<tags>.whl"
                 echo "Skipping this artifact"
                 continue
               fi
