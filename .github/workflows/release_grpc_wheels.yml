@@ -69,6 +69,13 @@ jobs:
               ABI_VERSION="${PARTS[5]}"
             else
               echo "Unexpected format in directory name: $DIR_NAME"
+              echo "Expected formats: grpcio-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION or grpcio-VERSION-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION"
+              continue
+            fi
+            
+            # Verify we have a commit SHA
+            if [ -z "$COMMIT_SHA" ]; then
+              echo "Failed to extract commit SHA from directory name: $DIR_NAME"
               continue
             fi
             
@@ -94,9 +101,9 @@ jobs:
                 PKG_VERSION="${BASH_REMATCH[1]}"
                 echo "Extracted alternative version format: $PKG_VERSION"
               else
-                # Use the commit SHA from directory name as fallback
-                PKG_VERSION="$COMMIT_SHA"
-                echo "Using fallback version from commit SHA: $PKG_VERSION"
+                echo "Error: Unable to extract package version from $WHEEL_BASENAME"
+                echo "Skipping this artifact"
+                continue
               fi
             fi
             
