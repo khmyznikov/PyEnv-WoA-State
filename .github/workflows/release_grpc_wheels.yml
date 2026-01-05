@@ -51,6 +51,7 @@ jobs:
             
             # Count parts to determine format
             PARTS_COUNT=${#PARTS[@]}
+            COMMIT_SHA=""
             
             if [[ $PARTS_COUNT -eq 5 ]]; then
               # Format: grpcio-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
