@@ -6,9 +6,6 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      commit_sha:
-        description: 'Commit SHA from the build workflow (in format like v1.2.3-a1b2c3d or a1b2c3d)'
-        required: true
       run_id:
         description: 'The run ID of the grpc_wheel workflow'
         required: true
@@ -38,7 +35,7 @@ jobs:
           > $WHEELS_INFO_FILE
           
           # First pass: Process all wheel directories to extract information
-          for WHEEL_DIR in artifacts/grpcio-${{ github.event.inputs.commit_sha }}-*; do
+          for WHEEL_DIR in artifacts/grpcio-*; do
             if [ ! -d "$WHEEL_DIR" ]; then
               echo "No matching directories found"
               continue
@@ -54,21 +51,31 @@ jobs:
             
             # Count parts to determine format
             PARTS_COUNT=${#PARTS[@]}
+            COMMIT_SHA=""
             
             if [[ $PARTS_COUNT -eq 5 ]]; then
               # Format: grpcio-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
               # Example: grpcio-34ebb07-win_arm64-3.11-cp311
+              COMMIT_SHA="${PARTS[1]}"
               PLATFORM="${PARTS[2]}"
               PY_VERSION="${PARTS[3]}"
               ABI_VERSION="${PARTS[4]}"
             elif [[ $PARTS_COUNT -ge 6 ]]; then
               # Format: grpcio-VERSION-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
               # If version has dashes, there may be more parts
+              COMMIT_SHA="${PARTS[2]}"
               PLATFORM="${PARTS[3]}"
               PY_VERSION="${PARTS[4]}"
               ABI_VERSION="${PARTS[5]}"
             else
               echo "Unexpected format in directory name: $DIR_NAME"
+              echo "Expected formats: grpcio-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION or grpcio-VERSION-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION"
+              continue
+            fi
+            
+            # Verify we have a commit SHA
+            if [ -z "$COMMIT_SHA" ]; then
+              echo "Failed to extract commit SHA from directory name: $DIR_NAME"
               continue
             fi
             
@@ -94,14 +101,15 @@ jobs:
                 PKG_VERSION="${BASH_REMATCH[1]}"
                 echo "Extracted alternative version format: $PKG_VERSION"
               else
-                # Use the commit SHA from input as fallback
-                PKG_VERSION="$(echo "${{ github.event.inputs.commit_sha }}" | sed 's/^v//')"
-                echo "Using fallback version from commit SHA: $PKG_VERSION"
+                echo "Error: Unable to extract package version from $WHEEL_BASENAME"
+                echo "Expected wheel name format: grpcio-X.Y.Z-<tags>.whl"
+                echo "Skipping this artifact"
+                continue
               fi
             fi
             
             # Add wheel information to the file for grouping
-            echo "$PKG_VERSION|$PLATFORM|$PY_VERSION|$WHEEL_FILE" >> $WHEELS_INFO_FILE
+            echo "$PKG_VERSION|$PLATFORM|$PY_VERSION|$WHEEL_FILE|$COMMIT_SHA" >> $WHEELS_INFO_FILE
           done
           
           # Sort the wheels info file to group by version and platform
@@ -115,9 +123,10 @@ jobs:
           # Second pass: Create releases grouped by gRPC version and platform
           CURRENT_VERSION=""
           CURRENT_PLATFORM=""
+          CURRENT_COMMIT_SHA=""
           WHEEL_FILES=""
           
-          while IFS='|' read -r VERSION PLATFORM PY_VERSION WHEEL_FILE; do
+          while IFS='|' read -r VERSION PLATFORM PY_VERSION WHEEL_FILE COMMIT_SHA; do
             # If this is a new version+platform combination, create a release for previous group
             if [[ "$CURRENT_VERSION" != "" && ("$CURRENT_VERSION" != "$VERSION" || "$CURRENT_PLATFORM" != "$PLATFORM") ]]; then
               RELEASE_TAG="grpcio-${CURRENT_VERSION}-${CURRENT_PLATFORM}"
@@ -128,7 +137,7 @@ jobs:
               # Create GitHub release with all accumulated wheel files
               gh release create "$RELEASE_TAG" \
                 --title "$RELEASE_NAME" \
-                --notes "gRPC wheels built from commit ${{ github.event.inputs.commit_sha }}" \
+                --notes "gRPC wheels built from commit $CURRENT_COMMIT_SHA" \
                 --target ${{ github.ref_name }} \
                 $WHEEL_FILES
               
@@ -139,6 +148,7 @@ jobs:
             # Update current version and platform
             CURRENT_VERSION="$VERSION"
             CURRENT_PLATFORM="$PLATFORM"
+            CURRENT_COMMIT_SHA="$COMMIT_SHA"
             
             # Add wheel file to the list
             WHEEL_FILES="$WHEEL_FILES $WHEEL_FILE"
@@ -154,7 +164,7 @@ jobs:
             # Create GitHub release with all accumulated wheel files
             gh release create "$RELEASE_TAG" \
               --title "$RELEASE_NAME" \
-              --notes "gRPC wheels built from commit ${{ github.event.inputs.commit_sha }}" \
+              --notes "gRPC wheels built from commit $CURRENT_COMMIT_SHA" \
               --target ${{ github.ref_name }} \
               $WHEEL_FILES
           fi
@@ -164,6 +174,6 @@ jobs:
       - name: Summary
         run: |
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "Created consolidated releases for gRPC artifacts from commit ${{ github.event.inputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "Created consolidated releases for gRPC artifacts from workflow run ${{ github.event.inputs.run_id }}" >> $GITHUB_STEP_SUMMARY
           echo "Releases are grouped by gRPC version and platform, with all Python versions included as assets in each release." >> $GITHUB_STEP_SUMMARY
           echo "Check the [releases page](https://github.com/${{ github.repository }}/releases) for the new releases." >> $GITHUB_STEP_SUMMARY
