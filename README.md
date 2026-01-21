@@ -1,11 +1,11 @@
+# Check the **[Libs tracker🐍](https://github.com/khmyznikov/PyEnv-WoA-State/issues/1)** to get the latest updated on compatibility issues and make contribution to Python ecosystem on WoA
+## Willing to participate, but don't have the hardware? Reach the [Arm Developer Lab🔬](https://arm-university.github.io/Arm-Developer-Labs/2025/11/03/Python-Porting-Challenge.html)!
+
+<br>
+
 ## Test suites and track issues regarding the compatibility of Python libraries with Windows Arm64
 
 This repository contains scripts to test compatibility of Python libraries with Windows Arm64 as well as performance benchmarks between x64 and Arm64.
-
-<br>
-
-> ## Check the **[Libs tracker🐍](https://github.com/khmyznikov/PyEnv-WoA-State/issues/1)** to get the latest updated on compatibility issues and make contribution to Python ecosystem on WoA
-<br>
 
 ### get_missing_wheels
 
