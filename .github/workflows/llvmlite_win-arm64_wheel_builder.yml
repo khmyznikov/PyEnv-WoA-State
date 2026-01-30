@@ -1,9 +1,6 @@
 name: llvmlite_win-arm64_wheel_builder
 
 on:
-  pull_request:
-    paths:
-      - .github/workflows/llvmlite_win-arm64_wheel_builder.yml
   workflow_dispatch:
     inputs:
       llvmdev_run_id:
