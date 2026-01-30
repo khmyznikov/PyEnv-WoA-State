@@ -3,7 +3,7 @@ name: llvmdev
 on:
   pull_request:
     paths:
-      - .github/workflows/llvmdev_build.yml
+      - .github/workflows/llvmlite/llvmdev_build.yml
   label:
     types: [created]
   workflow_dispatch:
@@ -45,7 +45,7 @@ jobs:
         env:
           ARTIFACT_DIR: llvm_arm64_artifact
         run: |
-          call "%GITHUB_WORKSPACE%\.github\workflows\buildscripts\bld_llvm_winarm64.bat"
+          call "%GITHUB_WORKSPACE%\.github\workflows\llvmlite\bld_llvm_winarm64.bat"
           if %ERRORLEVEL% neq 0 exit /B %ERRORLEVEL%
           mkdir "%ARTIFACT_DIR%"
           xcopy /E /I /Y llvm-arm64-install "%ARTIFACT_DIR%\llvm-arm64-install"

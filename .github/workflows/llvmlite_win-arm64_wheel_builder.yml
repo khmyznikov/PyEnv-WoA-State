@@ -40,7 +40,7 @@ jobs:
         run: |
           git clone https://github.com/numba/llvmlite.git llvmlite_src
           cd llvmlite_src
-          git apply "%GITHUB_WORKSPACE%\patches\0001-Support-LLVMlite-on-Windows-ARM64.patch"
+          git apply "%GITHUB_WORKSPACE%\.github\workflows\llvmlite\patches\0001-Support-LLVMlite-on-Windows-ARM64.patch"
 
       - name: Setup Python
         uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548
