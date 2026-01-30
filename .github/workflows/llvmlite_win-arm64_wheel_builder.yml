@@ -1,0 +1,110 @@
+name: llvmlite_win-arm64_wheel_builder
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/llvmlite_win-arm64_wheel_builder.yml
+  workflow_dispatch:
+    inputs:
+      llvmdev_run_id:
+        description: 'llvmdev workflow run ID (optional)'
+        required: false
+        type: string
+      upload_wheel_to_anaconda:
+        description: 'Upload wheel to Anaconda Cloud - numba channel'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  VALIDATION_PYTHON_VERSION: "3.12"
+  ARTIFACT_RETENTION_DAYS: 7
+
+jobs:
+  win-arm64-build:
+    name: win-arm64-build
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: cmd
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+      fail-fast: false
+
+    steps:
+      - name: Checkout PyEnv-WoA-State repository
+        uses: actions/checkout@v4
+        
+      - name: Clone llvmlite repository
+        run: |
+          git clone https://github.com/numba/llvmlite.git llvmlite_src
+          cd llvmlite_src
+          git apply "%GITHUB_WORKSPACE%\.github\workflows\llvmlite\patches\0001-Support-LLVMlite-on-Windows-ARM64.patch"
+
+      - name: Setup Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Download llvmdev Artifact
+        if: ${{ inputs.llvmdev_run_id != '' }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: llvmdev_for_wheel-win-arm64
+          path: llvm_install
+          run-id: ${{ inputs.llvmdev_run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-installed-windows-arm64-static-v1
+          restore-keys: |
+            vcpkg-installed-windows-arm64-static
+
+      - name: Install build dependencies
+        env:
+          VCPKG_DIR: C:\vcpkg
+        run: |
+          "%VCPKG_DIR%\vcpkg.exe" install zlib:arm64-windows-static zstd:arm64-windows-static libxml2:arm64-windows-static
+          python -m pip install build wheel setuptools delvewheel
+
+      - name: Build wheel
+        working-directory: llvmlite_src
+        env:
+          CMAKE_ARGS: -DCMAKE_PREFIX_PATH=C:\vcpkg\installed\arm64-windows-static
+          LLVM_DIR: ${{ github.workspace }}\llvm_install\llvm-arm64-install\lib\cmake\llvm
+          LLVMLITE_PACKAGE_FORMAT: "wheel"
+        run: python -m build --wheel --no-isolation
+
+      - name: Repair wheel with delvewheel
+        run: |
+          if not exist wheel_temp mkdir wheel_temp
+          move llvmlite_src\dist\*.whl wheel_temp\
+          python -m delvewheel repair --analyze-existing -w dist wheel_temp\*.whl
+          dir dist
+
+      - name: Upload llvmlite wheel
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: llvmlite-win-arm64-py${{ matrix.python-version }}
+          path: dist/*.whl
+          compression-level: 0
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: llvmlite-win-arm64-${{ github.run_number }}
+          name: llvmlite Windows ARM64 Wheels - Build ${{ github.run_number }}
+          prerelease: true
+          files: dist/*.whl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

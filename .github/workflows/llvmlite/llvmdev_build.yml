@@ -1,0 +1,65 @@
+name: llvmdev
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/llvmlite/llvmdev_build.yml
+  label:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: LLVM DEV for Windows ARM64
+        default: all
+        required: true
+        type: choice
+        options:
+          - win-arm64
+      recipe:
+        description: Recipe to build
+        default: all
+        required: true
+        type: choice
+        options:
+          - llvmdev_for_wheel
+
+env:
+  ARTIFACT_RETENTION_DAYS: 30
+
+jobs:
+  build:
+    name:  llvmdev_for_wheel-win-arm64
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: bash -el {0}
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v5
+
+      - name: Build LLVM package - Windows ARM64 platform
+        shell: cmd
+        env:
+          ARTIFACT_DIR: llvm_arm64_artifact
+        run: |
+          call "%GITHUB_WORKSPACE%\.github\workflows\llvmlite\bld_llvm_winarm64.bat"
+          if %ERRORLEVEL% neq 0 exit /B %ERRORLEVEL%
+          mkdir "%ARTIFACT_DIR%"
+          xcopy /E /I /Y llvm-arm64-install "%ARTIFACT_DIR%\llvm-arm64-install"
+          
+      - name: Upload Windows ARM64 LLVM artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: llvmdev_for_wheel-win-arm64
+          path: llvm_arm64_artifact
+          compression-level: 0
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: error      
+
+      - name: Get Workflow Run ID
+        run: |
+          echo "Current workflow run ID: ${{ github.run_id }}"
+          echo "Use this ID when triggering llvmlite workflow"
