@@ -94,14 +94,4 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
-      - name: Create GitHub Release
-        if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: llvmlite-win-arm64-${{ github.run_number }}
-          name: llvmlite Windows ARM64 Wheels - Build ${{ github.run_number }}
-          prerelease: true
-          files: dist/*.whl
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
