@@ -29,7 +29,7 @@ jobs:
       - name: List wheels
         run: |
           find artifacts -type f -name "*.whl" | sort
-      - name: Create single GitHub release (gRPC style)
+      - name: Create single GitHub release
         run: |
           set -euo pipefail
           WHEELS=$(find artifacts -type f -name "*.whl" | sort)
