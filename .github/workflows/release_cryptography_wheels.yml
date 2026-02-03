@@ -6,9 +6,6 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      commit_sha:
-        description: 'Commit SHA from the build workflow (in format like v42.0.0-a1b2c3d or a1b2c3d)'
-        required: true
       run_id:
         description: 'The run ID of the cryptography_wheel workflow'
         required: true
@@ -31,9 +28,14 @@ jobs:
         run: |
           find artifacts -type f -name "*.whl" | sort
           
-      - name: Extract version information and create releases
+      - name: Extract version information and prepare releases
         run: |
-          for WHEEL_DIR in artifacts/cryptography-${{ github.event.inputs.commit_sha }}-*; do
+          # Create a temporary file to store wheel info
+          WHEELS_INFO_FILE="/tmp/wheels_info.txt"
+          > $WHEELS_INFO_FILE
+          
+          # First pass: Process all wheel directories to extract information
+          for WHEEL_DIR in artifacts/cryptography-*; do
             if [ ! -d "$WHEEL_DIR" ]; then
               echo "No matching directories found"
               continue
@@ -44,11 +46,38 @@ jobs:
             echo "Processing directory: $DIR_NAME"
             
             # Parse the directory name to extract metadata
-            # Format: cryptography-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
+            # Example: cryptography-34ebb07-arm64-3.11-py311
             IFS='-' read -ra PARTS <<< "$DIR_NAME"
-            PLATFORM="${PARTS[2]}"
-            PY_VERSION="${PARTS[3]}"
-            ABI_VERSION="${PARTS[4]}"
+            
+            # Count parts to determine format
+            PARTS_COUNT=${#PARTS[@]}
+            COMMIT_SHA=""
+            
+            if [[ $PARTS_COUNT -eq 5 ]]; then
+              # Format: cryptography-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
+              # Example: cryptography-34ebb07-arm64-3.11-py311
+              COMMIT_SHA="${PARTS[1]}"
+              PLATFORM="${PARTS[2]}"
+              PY_VERSION="${PARTS[3]}"
+              ABI_VERSION="${PARTS[4]}"
+            elif [[ $PARTS_COUNT -ge 6 ]]; then
+              # Format: cryptography-VERSION-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION
+              # If version has dashes, there may be more parts
+              COMMIT_SHA="${PARTS[2]}"
+              PLATFORM="${PARTS[3]}"
+              PY_VERSION="${PARTS[4]}"
+              ABI_VERSION="${PARTS[5]}"
+            else
+              echo "Unexpected format in directory name: $DIR_NAME"
+              echo "Expected formats: cryptography-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION or cryptography-VERSION-COMMIT_SHA-PLATFORM-PY_VERSION-ABI_VERSION"
+              continue
+            fi
+            
+            # Verify we have a commit SHA
+            if [ -z "$COMMIT_SHA" ]; then
+              echo "Failed to extract commit SHA from directory name: $DIR_NAME"
+              continue
+            fi
             
             # Find the wheel file
             WHEEL_FILE=$(find "$WHEEL_DIR" -name "*.whl" | head -n 1)
@@ -63,24 +92,88 @@ jobs:
             # Format is typically: cryptography-X.Y.Z-TAGS.whl
             PKG_VERSION=$(echo "$WHEEL_BASENAME" | sed -E 's/cryptography-([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
             
-            # Create a release tag that includes all relevant information
-            RELEASE_TAG="cryptography-${PKG_VERSION}-py${PY_VERSION}-${PLATFORM}"
-            RELEASE_NAME="Cryptography ${PKG_VERSION} for Python ${PY_VERSION} (${PLATFORM})"
+            # Verify we got a valid version
+            if [[ ! "$PKG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Warning: Couldn't extract valid package version from $WHEEL_BASENAME"
+              
+              # Try alternative extraction in case format is different
+              if [[ "$WHEEL_BASENAME" =~ cryptography-([0-9]+\.[0-9]+\.[0-9]+[a-z0-9.]*)-cp ]]; then
+                PKG_VERSION="${BASH_REMATCH[1]}"
+                echo "Extracted alternative version format: $PKG_VERSION"
+              else
+                echo "Error: Unable to extract package version from $WHEEL_BASENAME"
+                echo "Expected wheel name format: cryptography-X.Y.Z-<tags>.whl"
+                echo "Skipping this artifact"
+                continue
+              fi
+            fi
             
-            echo "Creating release: $RELEASE_NAME with tag $RELEASE_TAG"
+            # Add wheel information to the file for grouping
+            echo "$PKG_VERSION|$PLATFORM|$PY_VERSION|$WHEEL_FILE|$COMMIT_SHA" >> $WHEELS_INFO_FILE
+          done
+          
+          # Sort the wheels info file to group by version and platform
+          sort $WHEELS_INFO_FILE > "${WHEELS_INFO_FILE}.sorted"
+          mv "${WHEELS_INFO_FILE}.sorted" $WHEELS_INFO_FILE
+          
+          # Debug: show collected wheel info
+          echo "Collected wheel information:"
+          cat $WHEELS_INFO_FILE
+          
+          # Second pass: Create releases grouped by Cryptography version and platform
+          CURRENT_VERSION=""
+          CURRENT_PLATFORM=""
+          CURRENT_COMMIT_SHA=""
+          WHEEL_FILES=""
+          
+          while IFS='|' read -r VERSION PLATFORM PY_VERSION WHEEL_FILE COMMIT_SHA; do
+            # If this is a new version+platform combination, create a release for previous group
+            if [[ "$CURRENT_VERSION" != "" && ("$CURRENT_VERSION" != "$VERSION" || "$CURRENT_PLATFORM" != "$PLATFORM") ]]; then
+              RELEASE_TAG="cryptography-${CURRENT_VERSION}-${CURRENT_PLATFORM}"
+              RELEASE_NAME="Cryptography ${CURRENT_VERSION} for ${CURRENT_PLATFORM}"
+              
+              echo "Creating release: $RELEASE_NAME with tag $RELEASE_TAG"
+              
+              # Create GitHub release with all accumulated wheel files
+              gh release create "$RELEASE_TAG" \
+                --title "$RELEASE_NAME" \
+                --notes "Cryptography wheels built from commit $CURRENT_COMMIT_SHA" \
+                --target ${{ github.ref_name }} \
+                $WHEEL_FILES
+              
+              # Reset for next group
+              WHEEL_FILES=""
+            fi
             
-            # Create GitHub release
+            # Update current version and platform
+            CURRENT_VERSION="$VERSION"
+            CURRENT_PLATFORM="$PLATFORM"
+            CURRENT_COMMIT_SHA="$COMMIT_SHA"
+            
+            # Add wheel file to the list
+            WHEEL_FILES="$WHEEL_FILES $WHEEL_FILE"
+          done < $WHEELS_INFO_FILE
+          
+          # Create the last release group
+          if [[ "$CURRENT_VERSION" != "" ]]; then
+            RELEASE_TAG="cryptography-${CURRENT_VERSION}-${CURRENT_PLATFORM}"
+            RELEASE_NAME="Cryptography ${CURRENT_VERSION} for ${CURRENT_PLATFORM}"
+            
+            echo "Creating final release: $RELEASE_NAME with tag $RELEASE_TAG"
+            
+            # Create GitHub release with all accumulated wheel files
             gh release create "$RELEASE_TAG" \
               --title "$RELEASE_NAME" \
-              --notes "Cryptography wheel built from commit ${{ github.event.inputs.commit_sha }}" \
+              --notes "Cryptography wheels built from commit $CURRENT_COMMIT_SHA" \
               --target ${{ github.ref_name }} \
-              "$WHEEL_FILE"
-          done
+              $WHEEL_FILES
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Summary
         run: |
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "Created releases for artifacts from commit ${{ github.event.inputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "Created consolidated releases for Cryptography artifacts from workflow run ${{ github.event.inputs.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "Releases are grouped by Cryptography version and platform, with all Python versions included as assets in each release." >> $GITHUB_STEP_SUMMARY
           echo "Check the [releases page](https://github.com/${{ github.repository }}/releases) for the new releases." >> $GITHUB_STEP_SUMMARY
