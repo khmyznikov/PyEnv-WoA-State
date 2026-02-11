@@ -1,0 +1,150 @@
+From 0c978531a53ae60c17b889db429d9295227c39b7 Mon Sep 17 00:00:00 2001
+From: Mugunthan Selvanayagam <mugunthan.selvanayagam@multicorewareinc.com>
+Date: Tue, 10 Feb 2026 15:55:59 +0530
+Subject: [PATCH] Add patches for building Numba on Windows ARM64
+
+---
+ .github/workflows/upload_packages.yml        |  1 +
+ .github/workflows/wheel_workflow_matrix.json | 12 ++++++
+ buildscripts/github/workflow_groups.json     |  3 +-
+ numba/_dispatcher.cpp                        | 41 +++++++++++++++++++-
+ numba/core/typing/ctypes_utils.py            |  5 ++-
+ 5 files changed, 58 insertions(+), 4 deletions(-)
+
+diff --git a/.github/workflows/upload_packages.yml b/.github/workflows/upload_packages.yml
+index fadfcafd6..7393e92a1 100644
+--- a/.github/workflows/upload_packages.yml
++++ b/.github/workflows/upload_packages.yml
+@@ -113,6 +113,7 @@ jobs:
+           echo "linux-aarch64: $(find dist -type f -name "*manylinux*aarch64*.whl" | wc -l)"
+           echo "osx-arm64: $(find dist -type f -name "*macosx*arm64*.whl" | wc -l)"
+           echo "win-64: $(find dist -type f -name "*win_amd64*.whl" | wc -l)"
++          echo "win-arm64: $(find dist -type f -name "*win_amd64*.whl" | wc -l)"
+           echo ""
+           echo "=== Total wheels count ==="
+           find dist -type f -name "*.whl" | wc -l
+diff --git a/.github/workflows/wheel_workflow_matrix.json b/.github/workflows/wheel_workflow_matrix.json
+index e3f72b42b..cba00f666 100644
+--- a/.github/workflows/wheel_workflow_matrix.json
++++ b/.github/workflows/wheel_workflow_matrix.json
+@@ -19,5 +19,17 @@
+         { "python-version": "3.13", "numpy_test": "2.2" },
+         { "python-version": "3.13", "numpy_test": "2.3" },
+         { "python-version": "3.14", "numpy_test": "2.4" }
++      ],
++      "wheel_build_winarm64_matrix": [
++        { "python-version": "3.11", "numpy_build": "2.3.0", "python_tag": "cp311" },
++        { "python-version": "3.12", "numpy_build": "2.3.0", "python_tag": "cp312" },
++        { "python-version": "3.13", "numpy_build": "2.3.0", "python_tag": "cp313" },
++        { "python-version": "3.14", "numpy_build": "2.3.3", "python_tag": "cp314" }
++      ],
++    "wheel_test_winarm64_matrix": [
++        { "python-version": "3.11", "numpy_test": "2.3" },
++        { "python-version": "3.12", "numpy_test": "2.3" },
++        { "python-version": "3.13", "numpy_test": "2.3" },
++        { "python-version": "3.14", "numpy_test": "2.3.3" }
+       ]
+ }
+diff --git a/buildscripts/github/workflow_groups.json b/buildscripts/github/workflow_groups.json
+index a56bcacf7..5d6620619 100644
+--- a/buildscripts/github/workflow_groups.json
++++ b/buildscripts/github/workflow_groups.json
+@@ -10,7 +10,8 @@
+       "numba_linux-64_wheel_builder.yml",
+       "numba_linux-aarch64_wheel_builder.yml",
+       "numba_osx-arm64_wheel_builder.yml",
+-      "numba_win-64_wheel_builder.yml"
++      "numba_win-64_wheel_builder.yml",
++      "numba_win-arm64_wheel_builder.yml"
+     ]
+   }
+ }
+diff --git a/numba/_dispatcher.cpp b/numba/_dispatcher.cpp
+index bf3c18bfb..3d2a899ab 100644
+--- a/numba/_dispatcher.cpp
++++ b/numba/_dispatcher.cpp
+@@ -26,12 +26,46 @@
+  * exception state is preserved correctly).
+  *
+  */
+-
+ #if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
+
+ #ifndef Py_BUILD_CORE
+     #define Py_BUILD_CORE 1
+ #endif
++
++// Workaround for Windows ARM64 atomic operations in Python 3.12
++#if defined(_M_ARM64) && defined(_MSC_VER)
++    // Prevent pycore_atomic.h from being included - it has broken definitions for ARM64
++    #ifndef Py_ATOMIC_H
++        #define Py_ATOMIC_H 1
++    #endif
++    
++    // Define the atomic types that pycore_interp.h needs
++    typedef struct _Py_atomic_address {
++        uintptr_t _value;
++    } _Py_atomic_address;
++    
++    typedef struct _Py_atomic_int {
++        int _value;
++    } _Py_atomic_int;
++    
++    // C++ function overloads for atomic operations
++    static inline uintptr_t _Py_atomic_load_relaxed(const _Py_atomic_address *obj) {
++        return obj->_value;
++    }
++    
++    static inline int _Py_atomic_load_relaxed(const _Py_atomic_int *obj) {
++        return obj->_value;
++    }
++    
++    static inline void _Py_atomic_store_relaxed(_Py_atomic_address *obj, uintptr_t value) {
++        obj->_value = value;
++    }
++    
++    static inline void _Py_atomic_store_relaxed(_Py_atomic_int *obj, int value) {
++        obj->_value = value;
++    }
++#endif
++
+ #include "internal/pycore_frame.h"
+ // This is a fix suggested in the comments in https://github.com/python/cpython/issues/108216
+ // specifically https://github.com/python/cpython/issues/108216#issuecomment-1696565797
+@@ -46,7 +80,10 @@
+  */
+ #include "dynamic_annotations.h"
+ #if (PY_MINOR_VERSION == 12)
+-    #include "internal/pycore_atomic.h"
++    // pycore_atomic.h is already handled above for Windows ARM64
++    #if !(defined(_M_ARM64) && defined(_MSC_VER))
++        #include "internal/pycore_atomic.h"
++    #endif
+ #endif
+ #include "internal/pycore_interp.h"
+ #include "internal/pycore_pyerrors.h"
+diff --git a/numba/core/typing/ctypes_utils.py b/numba/core/typing/ctypes_utils.py
+index 3df27f9a2..803d032cb 100644
+--- a/numba/core/typing/ctypes_utils.py
++++ b/numba/core/typing/ctypes_utils.py
+@@ -5,6 +5,9 @@ Support for typing ctypes function pointers.
+
+ import ctypes
+ import sys
++import platform
++
++is_arm = platform.machine().lower() in ('arm64', 'aarch64')
+
+ from numba.core import types, config
+ from numba.core.typing import templates
+@@ -137,7 +140,7 @@ def make_function_type(cfnptr):
+     # platforms, explicit conversion to a int64 should match.
+     if cret == types.voidptr:
+         cret = types.uintp
+-    if sys.platform == 'win32' and not cfnptr._flags_ & ctypes._FUNCFLAG_CDECL:
++    if sys.platform == 'win32' and not is_arm and not cfnptr._flags_ & ctypes._FUNCFLAG_CDECL:
+         # 'stdcall' calling convention under Windows
+         cconv = 'x86_stdcallcc'
+     else:
+-- 
+2.52.0.windows.1
