@@ -1,0 +1,60 @@
+name: numba release
+permissions:
+  contents: write
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Run ID of numba_win-arm64_wheel_builder workflow'
+        required: true
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download wheel artifacts
+        uses: dawidd6/action-download-artifact@v11
+        with:
+          workflow: numba_win-arm64_wheel_builder.yml
+          run_id: ${{ github.event.inputs.run_id }}
+          path: artifacts
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List wheels
+        run: |
+          find artifacts -type f -name "*.whl" | sort
+      
+      - name: Create single GitHub release
+        run: |
+          set -euo pipefail
+          WHEELS=$(find artifacts -type f -name "*.whl" | sort)
+          if [ -z "$WHEELS" ]; then
+            echo "No wheels found"
+            exit 1
+          fi
+          FIRST_WHEEL=$(echo "$WHEELS" | head -n 1)
+          BASENAME=$(basename "$FIRST_WHEEL")
+          VERSION=$(echo "$BASENAME" | sed -E 's/numba-([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          PLATFORM="win_arm64"
+          TAG="numba-${VERSION}-${PLATFORM}"
+          TITLE="numba ${VERSION} for Windows ARM64"
+          echo "Creating release:"
+          echo "  Tag:   $TAG"
+          echo "  Title: $TITLE"
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --notes "numba Windows ARM64 wheels built from workflow run ${{ github.event.inputs.run_id }}" \
+            --prerelease \
+            $WHEELS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## numba Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run ID:** ${{ github.event.inputs.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release:**" >> $GITHUB_STEP_SUMMARY
+          find artifacts -type f -name "*.whl" | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
