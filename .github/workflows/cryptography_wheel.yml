@@ -119,7 +119,7 @@ jobs:
         id: check-pymanager
         shell: cmd
         run: |
-          where py >nul 2>&1 && echo installed=true >> %GITHUB_OUTPUT% || echo installed=false >> %GITHUB_OUTPUT%
+          py list >nul 2>&1 && echo installed=true >> %GITHUB_OUTPUT% || echo installed=false >> %GITHUB_OUTPUT%
 
       - name: Install PyManager
         if: steps.check-pymanager.outputs.installed == 'false'
