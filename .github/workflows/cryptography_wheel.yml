@@ -117,32 +117,31 @@ jobs:
 
       - name: Check if PyManager is installed
         id: check-pymanager
-        shell: cmd
+        shell: pwsh
         run: |
-          py list >nul 2>nul
-          if errorlevel 1 (
-            echo installed=false >> %GITHUB_OUTPUT%
-          ) else (
-            echo installed=true >> %GITHUB_OUTPUT%
-          )
-          exit /b 0
+          py list 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            echo "installed=false" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "installed=true" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Install PyManager
         if: steps.check-pymanager.outputs.installed == 'false'
-        shell: cmd
+        shell: pwsh
         run: winget install 9NQ7512CXL7T --accept-package-agreements --accept-source-agreements
 
       - name: Install Python ${{ matrix.PYTHON.VERSION }} with PyManager
-        shell: cmd
+        shell: pwsh
         run: |
           py install ${{ matrix.PYTHON.VERSION }}
-          if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Set Python ${{ matrix.PYTHON.VERSION }} as default
-        shell: cmd
+        shell: pwsh
         run: |
           py default ${{ matrix.PYTHON.VERSION }}
-          if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       
       - uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b
         with:
