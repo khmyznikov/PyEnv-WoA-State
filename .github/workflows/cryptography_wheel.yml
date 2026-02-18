@@ -116,7 +116,7 @@ jobs:
         id: check-pymanager
         shell: cmd
         run: |
-          where py >nul 2>&1 && echo installed=true>> %GITHUB_OUTPUT% || echo installed=false>> %GITHUB_OUTPUT%
+          where py >nul 2>&1 && echo installed=true >> %GITHUB_OUTPUT% || echo installed=false >> %GITHUB_OUTPUT%
 
       - name: Install PyManager
         if: steps.check-pymanager.outputs.installed == 'false'
@@ -125,11 +125,15 @@ jobs:
 
       - name: Install Python ${{ matrix.PYTHON.VERSION }} with PyManager
         shell: cmd
-        run: py install ${{ matrix.PYTHON.VERSION }}
+        run: |
+          py install ${{ matrix.PYTHON.VERSION }}
+          if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 
       - name: Set Python ${{ matrix.PYTHON.VERSION }} as default
         shell: cmd
-        run: py default ${{ matrix.PYTHON.VERSION }}
+        run: |
+          py default ${{ matrix.PYTHON.VERSION }}
+          if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
       
       - uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b
         with:
