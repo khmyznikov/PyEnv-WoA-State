@@ -89,7 +89,9 @@ jobs:
         WINDOWS:
           - {ARCH: 'arm64', WINDOWS: 'arm64', RUST_TRIPLE: 'aarch64-pc-windows-msvc', RUNNER: 'windows-11-arm'}
         PYTHON:
-          - {VERSION: "3.14", "ABI_VERSION": "py314"}
+          - {VERSION: "3.14", "ABI_VERSION": "py38"}
+          - {VERSION: "3.14", "ABI_VERSION": "py311"}
+          - {VERSION: "3.14t"}
           
     name: "${{ matrix.PYTHON.VERSION }} ${{ matrix.WINDOWS.WINDOWS }} ${{ matrix.PYTHON.ABI_VERSION }}"
     steps:
