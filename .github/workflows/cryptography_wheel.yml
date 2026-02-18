@@ -119,11 +119,12 @@ jobs:
         id: check-pymanager
         shell: pwsh
         run: |
-          py list 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            echo "installed=false" >> $env:GITHUB_OUTPUT
-          } else {
+          $PSNativeCommandUseErrorActionPreference = $false
+          py list 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
             echo "installed=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "installed=false" >> $env:GITHUB_OUTPUT
           }
 
       - name: Install PyManager
