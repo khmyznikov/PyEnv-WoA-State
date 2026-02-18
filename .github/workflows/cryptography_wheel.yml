@@ -120,9 +120,6 @@ jobs:
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
 
-          # Remove legacy Python Launcher if present
-          winget uninstall Python.Launcher --accept-source-agreements --silent 2>$null | Out-Null
-
           # Install PyManager
           winget install 9NQ7512CXL7T --accept-package-agreements --accept-source-agreements
           if ($LASTEXITCODE -ne 0) { throw "Failed to install PyManager" }
