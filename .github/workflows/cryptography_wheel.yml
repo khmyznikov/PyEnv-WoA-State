@@ -89,9 +89,10 @@ jobs:
         WINDOWS:
           - {ARCH: 'arm64', WINDOWS: 'arm64', RUST_TRIPLE: 'aarch64-pc-windows-msvc', RUNNER: 'windows-11-arm'}
         PYTHON:
-          - {VERSION: "3.14", "ABI_VERSION": "py38"}
-          - {VERSION: "3.14", "ABI_VERSION": "py311"}
-          - {VERSION: "3.14t"}
+          # Build wheels with Python 3.14 using limited ABI for backward compatibility
+          - {VERSION: "3.14", "ABI_VERSION": "py38"}  # Compatible with Python 3.8+
+          - {VERSION: "3.14", "ABI_VERSION": "py311"} # Compatible with Python 3.11+
+          - {VERSION: "3.14t"}  # Free-threaded Python, no limited ABI
           
     name: "${{ matrix.PYTHON.VERSION }} ${{ matrix.WINDOWS.WINDOWS }} ${{ matrix.PYTHON.ABI_VERSION || 'no-abi' }}"
     steps:
