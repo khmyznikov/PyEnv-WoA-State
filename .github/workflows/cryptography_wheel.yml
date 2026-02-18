@@ -112,11 +112,24 @@ jobs:
         with:
           name: cryptography-sdist
 
-      - name: Setup python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ matrix.PYTHON.VERSION }}
-          architecture: ${{ matrix.WINDOWS.ARCH }}
+      - name: Check if PyManager is installed
+        id: check-pymanager
+        shell: cmd
+        run: |
+          where py >nul 2>&1 && echo installed=true>> %GITHUB_OUTPUT% || echo installed=false>> %GITHUB_OUTPUT%
+
+      - name: Install PyManager
+        if: steps.check-pymanager.outputs.installed == 'false'
+        shell: cmd
+        run: winget install 9NQ7512CXL7T --accept-package-agreements --accept-source-agreements
+
+      - name: Install Python ${{ matrix.PYTHON.VERSION }} with PyManager
+        shell: cmd
+        run: py install ${{ matrix.PYTHON.VERSION }}
+
+      - name: Set Python ${{ matrix.PYTHON.VERSION }} as default
+        shell: cmd
+        run: py default ${{ matrix.PYTHON.VERSION }}
       
       - uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b
         with:
