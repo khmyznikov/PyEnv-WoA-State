@@ -119,6 +119,8 @@ jobs:
         run: |
           winget install Python.PythonInstallManager --source winget --accept-package-agreements --accept-source-agreements
           if ($LASTEXITCODE -ne 0) { throw "Failed to install PyManager" }
+          
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
           $pyVersion = "${{ matrix.PYTHON.VERSION }}-${{ matrix.WINDOWS.ARCH }}"
           pymanager install $pyVersion
