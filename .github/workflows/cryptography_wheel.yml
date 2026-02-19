@@ -120,18 +120,28 @@ jobs:
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
 
-          # Install PyManager
-          winget install 9NQ7512CXL7T --accept-package-agreements --accept-source-agreements
+          winget install Python.PythonInstallManager --source winget --accept-package-agreements --accept-source-agreements
           if ($LASTEXITCODE -ne 0) { throw "Failed to install PyManager" }
 
-          # Refresh PATH for current session
+          # Refresh PATH to pick up pymanager
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
-          py install ${{ matrix.PYTHON.VERSION }}
-          if ($LASTEXITCODE -ne 0) { throw "Failed to install Python ${{ matrix.PYTHON.VERSION }}" }
+          $pyVersion = "${{ matrix.PYTHON.VERSION }}-${{ matrix.WINDOWS.ARCH }}"
+          pymanager install $pyVersion
+          if ($LASTEXITCODE -ne 0) { throw "Failed to install Python $pyVersion" }
 
-          py default ${{ matrix.PYTHON.VERSION }}
-          if ($LASTEXITCODE -ne 0) { throw "Failed to set Python ${{ matrix.PYTHON.VERSION }} as default" }
+          # Resolve installed Python path and expose for all subsequent steps
+          $pythonExe = pymanager exec -V:$pyVersion -c "import sys; print(sys.executable)"
+          if ($LASTEXITCODE -ne 0) { throw "Failed to resolve Python path" }
+          $pythonExe = $pythonExe.Trim()
+          $pythonDir = Split-Path $pythonExe
+          $scriptsDir = Join-Path $pythonDir "Scripts"
+
+          echo "Python executable: $pythonExe"
+          echo "Python directory:  $pythonDir"
+          echo "$pythonDir" >> $env:GITHUB_PATH
+          echo "$scriptsDir" >> $env:GITHUB_PATH
+          echo "UV_PYTHON=$pythonExe" >> $env:GITHUB_ENV
       
       - uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b
         with:
@@ -157,7 +167,7 @@ jobs:
       - run: |
           # Verify requirements files exist before using them
           ls -la ${UV_REQUIREMENTS_PATH}
-          pip install -r "${UV_REQUIREMENTS_PATH}"
+          python -m pip install -r "${UV_REQUIREMENTS_PATH}"
         shell: bash
       
       - run: mkdir wheelhouse
