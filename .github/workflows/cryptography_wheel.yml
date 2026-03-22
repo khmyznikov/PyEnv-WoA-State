@@ -123,7 +123,10 @@ jobs:
           
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
-          $pyVersion = "${{ matrix.PYTHON.VERSION }}-${{ matrix.WINDOWS.ARCH }}"
+          $pyVersion = "${{ matrix.PYTHON.VERSION }}"
+          if ("${{ matrix.WINDOWS.ARCH }}" -ne "x64") {
+            $pyVersion += "-${{ matrix.WINDOWS.ARCH }}"
+          }
           pymanager install $pyVersion
           if ($LASTEXITCODE -ne 0) { throw "Failed to install Python $pyVersion" }
 
