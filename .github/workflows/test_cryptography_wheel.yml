@@ -92,7 +92,7 @@ jobs:
           echo "$scriptsDir" >> $env:GITHUB_PATH
 
       - name: Install cryptography wheel
-        run: python -m pip install cryptography --no-index --find-links wheelhouse/
+        run: python -m pip install cryptography --find-links wheelhouse/ --no-cache-dir
 
       - name: Run smoke tests
         run: python tests/cryptography/smoke_test_cryptography.py
