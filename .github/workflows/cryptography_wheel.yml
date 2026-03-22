@@ -1,4 +1,4 @@
-name: cryptography win_arm64
+name: cryptography windows
 permissions:
   contents: read
 on:
@@ -88,6 +88,7 @@ jobs:
       matrix:
         WINDOWS:
           - {ARCH: 'arm64', WINDOWS: 'arm64', RUST_TRIPLE: 'aarch64-pc-windows-msvc', RUNNER: 'windows-11-arm'}
+          - {ARCH: 'x64', WINDOWS: 'win64', RUST_TRIPLE: 'x86_64-pc-windows-msvc', RUNNER: 'windows-latest'}
         PYTHON:
           # Build wheels with Python 3.14 using limited ABI for backward compatibility
           - {VERSION: "3.14", "ABI_VERSION": "py311"} # Compatible with Python 3.11+
