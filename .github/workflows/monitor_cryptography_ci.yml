@@ -1,0 +1,121 @@
+name: Monitor cryptography CI (windows-arm64)
+
+# Polls the latest completed run of pyca/cryptography's CI workflow on `main`.
+# If the regular `windows` jobs succeed but `windows-arm64` failed, opens an
+# issue in this repo assigned to @khmyznikov with a link to the failed job.
+
+on:
+  schedule:
+    # Daily at 09:00 America/Los_Angeles. GitHub cron is UTC and does not
+    # observe DST: 16:00 UTC = 09:00 PDT / 08:00 PST.
+    - cron: '0 16 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      UPSTREAM_REPO: pyca/cryptography
+      UPSTREAM_WORKFLOW: ci.yml
+      # How many of the most recent completed runs to inspect each tick.
+      SCAN_LIMIT: '25'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Scan recent cryptography CI runs
+        env:
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Most recent completed CI runs across ALL branches/PRs.
+          runs_json=$(gh run list \
+            --repo "$UPSTREAM_REPO" \
+            --workflow "$UPSTREAM_WORKFLOW" \
+            --status completed \
+            --limit "$SCAN_LIMIT" \
+            --json databaseId,headSha,url,event,headBranch,displayTitle)
+
+          count=$(echo "$runs_json" | jq 'length')
+          echo "Scanning $count recent completed runs."
+
+          echo "$runs_json" | jq -c '.[]' | while read -r run; do
+            run_id=$(echo "$run" | jq -r '.databaseId')
+            run_url=$(echo "$run" | jq -r '.url')
+            head_sha=$(echo "$run" | jq -r '.headSha')
+            event=$(echo "$run" | jq -r '.event')
+            branch=$(echo "$run" | jq -r '.headBranch')
+            title=$(echo "$run" | jq -r '.displayTitle')
+
+            echo "::group::run $run_id ($event on $branch) — $title"
+
+            jobs_json=$(gh api --paginate \
+              "repos/${UPSTREAM_REPO}/actions/runs/${run_id}/jobs" \
+              -q '[.jobs[] | {name, conclusion, html_url}]' \
+              | jq -s 'add')
+
+            windows_failed=$(echo "$jobs_json" \
+              | jq '[.[] | select(.name | test("^windows \\(")) | select(.conclusion != "success" and .conclusion != null)] | length')
+            windows_total=$(echo "$jobs_json" \
+              | jq '[.[] | select(.name | test("^windows \\("))] | length')
+
+            arm_job=$(echo "$jobs_json" \
+              | jq -c '[.[] | select(.name == "windows-arm64")] | .[0] // empty')
+
+            if [ -z "$arm_job" ]; then
+              echo "windows-arm64 job not present; skipping."
+              echo "::endgroup::"
+              continue
+            fi
+
+            arm_conclusion=$(echo "$arm_job" | jq -r '.conclusion // ""')
+            arm_url=$(echo "$arm_job" | jq -r '.html_url // ""')
+
+            echo "windows total=$windows_total failed=$windows_failed; arm=$arm_conclusion"
+
+            if [ "$windows_total" -gt 0 ] && [ "$windows_failed" -eq 0 ] && [ "$arm_conclusion" = "failure" ]; then
+              echo "Mismatch detected on run $run_id."
+
+              # De-dupe: skip if any (open or closed) issue already references this run id.
+              existing=$(gh issue list --repo "$REPO" \
+                --state all \
+                --search "in:title \"run ${run_id}\"" \
+                --json number -q '.[0].number // empty')
+
+              if [ -n "$existing" ]; then
+                echo "Issue #$existing already tracks run ${run_id}; skipping."
+                echo "::endgroup::"
+                continue
+              fi
+
+              title_str="cryptography CI: windows-arm64 failed while windows succeeded (run ${run_id})"
+              body=$(cat <<EOF
+          Upstream **pyca/cryptography** CI run shows the regular Windows jobs passing while \`windows-arm64\` failed.
+
+          - Event: \`${event}\` on \`${branch}\`
+          - Commit: \`${head_sha}\`
+          - Title: ${title}
+          - CI run: ${run_url}
+          - Failed \`windows-arm64\` job: ${arm_url}
+
+          Detected automatically by \`.github/workflows/monitor_cryptography_ci.yml\`.
+          EOF
+              )
+
+              gh issue create --repo "$REPO" \
+                --title "$title_str" \
+                --body "$body" \
+                --assignee khmyznikov
+            fi
+
+            echo "::endgroup::"
+          done
