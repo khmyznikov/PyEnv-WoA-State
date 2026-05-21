@@ -73,11 +73,14 @@ jobs:
       - name: Build wheel
         working-directory: llvmlite_src
         env:
-          CMAKE_ARGS: -DCMAKE_PREFIX_PATH=C:\vcpkg\installed\arm64-windows-static
+          CMAKE_ARGS: >-
+            -DCMAKE_PREFIX_PATH=C:\vcpkg\installed\arm64-windows-static
+            -DZLIB_ROOT=C:\vcpkg\installed\arm64-windows-static
+            -DZLIB_LIBRARY=C:\vcpkg\installed\arm64-windows-static\lib\zlib.lib
+            -DZLIB_INCLUDE_DIR=C:\vcpkg\installed\arm64-windows-static\include
           LLVM_DIR: ${{ github.workspace }}\llvm_install\llvm-arm64-install\lib\cmake\llvm
           LLVMLITE_PACKAGE_FORMAT: "wheel"
         run: python -m build --wheel --no-isolation
-
       - name: Repair wheel with delvewheel
         run: |
           if not exist wheel_temp mkdir wheel_temp
