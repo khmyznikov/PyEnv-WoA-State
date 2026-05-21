@@ -18,7 +18,7 @@ on:
 
   pull_request:
     paths:
-      - .github/workflows/llvmlite/llvmdev_build.yml
+      - .github/workflows/llvmdev_build.yml
 
 env:
   ARTIFACT_RETENTION_DAYS: 30
