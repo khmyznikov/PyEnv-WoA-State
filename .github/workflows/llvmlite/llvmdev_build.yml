@@ -1,6 +1,8 @@
 name: llvmdev
 
 on:
+  push:
+    branches: main
   pull_request:
     paths:
       - .github/workflows/llvmlite/llvmdev_build.yml
