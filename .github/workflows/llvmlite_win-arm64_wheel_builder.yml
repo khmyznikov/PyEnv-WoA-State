@@ -69,6 +69,9 @@ jobs:
         run: |
           "%VCPKG_DIR%\vcpkg.exe" install zlib:arm64-windows-static zstd:arm64-windows-static libxml2:arm64-windows-static
           python -m pip install build wheel setuptools delvewheel
+          
+      - name: Verify vcpkg zlib library name
+        run: dir C:\vcpkg\installed\arm64-windows-static\lib\zlib*
 
       - name: Build wheel
         working-directory: llvmlite_src
