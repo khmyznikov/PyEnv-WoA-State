@@ -1,25 +1,24 @@
 name: llvmdev
 
 on:
-  pull_request:
-    paths:
-      - .github/workflows/llvmlite/llvmdev_build.yml
   workflow_dispatch:
     inputs:
       platform:
         description: LLVM DEV for Windows ARM64
         required: true
-        default: win-arm64
         type: choice
         options:
           - win-arm64
       recipe:
         description: Recipe to build
         required: true
-        default: llvmdev_for_wheel
         type: choice
         options:
           - llvmdev_for_wheel
+
+  pull_request:
+    paths:
+      - .github/workflows/llvmlite/llvmdev_build.yml
 
 env:
   ARTIFACT_RETENTION_DAYS: 30
