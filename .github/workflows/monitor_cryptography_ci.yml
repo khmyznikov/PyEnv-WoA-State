@@ -208,10 +208,11 @@ jobs:
           }
           export -f process_run
 
-          # Fan out, bounded by $PARALLELISM. -I uses a unique placeholder so any
-          # `{}` inside the JSON input is not misinterpreted.
+          # Fan out, bounded by $PARALLELISM. `-d '\n'` disables xargs's quote /
+          # backslash processing (which would otherwise mangle the JSON lines)
+          # and splits input strictly on newlines.
           jq -c '.[]' "$workdir/runs.json" \
-            | xargs -I __RUN_JSON__ -P "$PARALLELISM" \
+            | xargs -d '\n' -I __RUN_JSON__ -P "$PARALLELISM" \
                 bash -c 'process_run "$@"' _ __RUN_JSON__
 
           for f in "$workdir"/logs/*.log; do
