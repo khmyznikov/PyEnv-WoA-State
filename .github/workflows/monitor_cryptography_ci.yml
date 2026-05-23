@@ -30,14 +30,15 @@ jobs:
             label: "cryptography CI (tests-nocoverage, arm64)"
             workflow: ci.yml
             scan_limit: '25'
-            # jq regex: match the windows-arm64 tests-nocoverage job exactly.
-            arm_job_regex: '^windows \(arm64, arm64, windows-11-arm.*tests-nocoverage\)$'
+            # jq regex: match the windows-arm64 tests-nocoverage job, e.g.
+            #   "windows (arm64, arm64, windows-11-arm, 3.14, tests-nocoverage)"
+            arm_job_regex: '^windows \(arm64.*tests-nocoverage\)$'
             # ERE: if present in the log, tests passed (e.g. "4319 passed, 45 skipped, ... in 36.20s").
             success_log_regex: '[0-9]+ passed[^\n]* in [0-9]+'
           - id: wheels
             label: "cryptography wheel-builder (win_arm64)"
             workflow: wheel-builder.yml
-            scan_limit: '15'
+            scan_limit: '25'
             # jq regex: Windows arm64 wheel jobs only (e.g. "3.14 arm64", "3.14t arm64",
             # "3.14 arm64 py311"). Excludes macOS jobs like "3.14 ABI py311 macOS -arch arm64".
             arm_job_regex: '^[^ ]+ arm64( py[0-9]+)?$'
