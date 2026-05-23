@@ -33,8 +33,9 @@ jobs:
             # jq regex: match the windows-arm64 tests-nocoverage job, e.g.
             #   "windows (arm64, arm64, windows-11-arm, 3.14, tests-nocoverage)"
             arm_job_regex: '^windows \(arm64.*tests-nocoverage\)$'
-            # ERE: if present in the log, tests passed (e.g. "4319 passed, 45 skipped, ... in 36.20s").
-            success_log_regex: '[0-9]+ passed[^\n]* in [0-9]+'
+            # ERE: nox prints this only when the session passed with zero failures.
+            # Example: "nox > Session tests-nocoverage was successful in 38 seconds."
+            success_log_regex: 'nox > Session tests-nocoverage was successful'
           - id: wheels
             label: "cryptography wheel-builder (win_arm64)"
             workflow: wheel-builder.yml
