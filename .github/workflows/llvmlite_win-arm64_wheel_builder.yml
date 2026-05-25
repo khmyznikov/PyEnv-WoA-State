@@ -73,7 +73,7 @@ jobs:
       - name: Build wheel
         working-directory: llvmlite_src
         env:
-          CMAKE_ARGS: "-DCMAKE_PREFIX_PATH=C:\\vcpkg\\installed\\arm64-windows-static"
+          CMAKE_ARGS: "-DCMAKE_PREFIX_PATH=C:\\vcpkg\\installed\\arm64-windows-static -DZLIB_LIBRARY=C:\\vcpkg\\installed\\arm64-windows-static\\lib\\zs.lib"
           LLVM_DIR: ${{ github.workspace }}\llvm_install\llvm-arm64-install\lib\cmake\llvm
           LLVMLITE_PACKAGE_FORMAT: "wheel"
         run: python -m build --wheel --no-isolation
