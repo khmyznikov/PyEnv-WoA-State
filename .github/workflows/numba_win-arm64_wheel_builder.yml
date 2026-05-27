@@ -60,7 +60,7 @@ jobs:
         run: |
           git clone https://github.com/MugundanMCW/numba.git numba_src
           cd numba_src
-          git checkout 1ada4f950d29a36db2996235e1086326efeb1e5e
+          git checkout 431c8c2a71c64a52601f79e57103cad68852f859
       
       - name: Setup Python
         uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
