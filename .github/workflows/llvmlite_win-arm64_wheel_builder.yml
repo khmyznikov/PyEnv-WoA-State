@@ -35,9 +35,9 @@ jobs:
         
       - name: Clone llvmlite repository
         run: |
-          git clone https://github.com/MugundanMCW/numba.git llvmlite_src
+          git clone https://github.com/MugundanMCW/llvmlite.git llvmlite_src
           cd llvmlite_src
-          git checkout cc03f742b98cef6df33701b1c31f26410c30d2fe
+          git checkout 140cced57a14685c843f27e30c08e72889b4fed5
 
       - name: Setup Python
         uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548
