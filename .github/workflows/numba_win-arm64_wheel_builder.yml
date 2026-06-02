@@ -10,7 +10,7 @@ on:
 env:
   VALIDATION_PYTHON_VERSION: "3.12"
   ARTIFACT_RETENTION_DAYS: 7
-  LLVMLITE_RELEASE_TAG: llvmlite-0.48.0-win_arm64
+  LLVMLITE_RELEASE_TAG: llvmlite_winarm64
   LLVMLITE_REPO: MugundanMCW/PyEnv-WoA-State
 
 jobs:
@@ -84,7 +84,7 @@ jobs:
           REM Determine the wheel filename based on Python version
           set PYTHON_VERSION=${{ matrix.python_canonical }}
           set PYTHON_TAG=cp%PYTHON_VERSION:.=%
-          set WHEEL_NAME=llvmlite-0.48.0.dev0+20.gae1fa36b.dirty-%PYTHON_TAG%-%PYTHON_TAG%-win_arm64.whl
+          set WHEEL_NAME=llvmlite-0+untagged.ga453161-%PYTHON_TAG%-%PYTHON_TAG%-win_arm64.whl
           
           REM Download the wheel from GitHub release
           if not exist llvmlite_wheels mkdir llvmlite_wheels
