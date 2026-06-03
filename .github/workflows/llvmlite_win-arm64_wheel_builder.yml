@@ -37,7 +37,7 @@ jobs:
         run: |
           git clone https://github.com/MugundanMCW/llvmlite.git llvmlite_src
           cd llvmlite_src
-          git checkout a453161e7a736c691c10a6445c600929768ff0e0
+          git checkout 8bdbe0c3fa3f3bf5cd67072cc0a8438a8d675b36
 
       - name: Setup Python
         uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548
