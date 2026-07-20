@@ -63,7 +63,7 @@ jobs:
       matrix:
         buildplat:
           - ["windows-11-arm", "win_arm64"]
-        python: [["cp313", "3.13"], ["cp311", "3.11"], ["cp312", "3.12"]] 
+        python: [["cp311", "3.11"], ["cp312", "3.12"], ["cp313", "3.13"], ["cp314", "3.14"]] 
 
     steps:
       - name: Checkout repository
