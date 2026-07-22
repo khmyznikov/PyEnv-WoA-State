@@ -81,7 +81,7 @@ jobs:
           git submodule update --init --recursive
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.23.3
+        uses: pypa/cibuildwheel@v4.1.0
         with:
           output-dir: wheelhouse
           package-dir: ${{ env.GRPC_DIR }}
